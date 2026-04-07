@@ -1,0 +1,11 @@
+aiogram==3.15.0
+sqlalchemy==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+apscheduler==3.10.4
+aiohttp==3.10.11
+matplotlib==3.9.3
+pydantic-settings==2.7.0
+python-dotenv==1.0.1
+aiofiles==24.1.0
+Pillow==11.0.0
