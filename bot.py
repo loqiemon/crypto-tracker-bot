@@ -3,6 +3,8 @@ import logging
 
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiohttp import web
 
 from config import settings
 from db.base import init_db
@@ -14,32 +16,79 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+WEBHOOK_PATH = "/webhook"
 
-async def main() -> None:
+
+def create_bot_and_dp() -> tuple[Bot, Dispatcher]:
     bot = Bot(token=settings.BOT_TOKEN)
     dp = Dispatcher(storage=MemoryStorage())
-
     dp.include_router(common.router)
     dp.include_router(subscription.router)
+    return bot, dp
 
+
+async def on_startup(bot: Bot) -> None:
     await init_db()
     logger.info("Database initialized")
 
-    from services.scheduler import init_scheduler, close_http_session
+    from services.scheduler import init_scheduler
+    await init_scheduler(bot)
+    logger.info("Scheduler initialized")
 
-    async def on_startup():
-        await init_scheduler(bot)
-        logger.info("Scheduler initialized")
+    if settings.USE_WEBHOOK:
+        webhook_url = f"{settings.WEBHOOK_BASE_URL}{WEBHOOK_PATH}"
+        await bot.set_webhook(
+            url=webhook_url,
+            drop_pending_updates=True,
+        )
+        logger.info("Webhook set: %s", webhook_url)
 
-    async def on_shutdown():
-        await close_http_session()
-        logger.info("HTTP session closed")
 
-    dp.startup.register(on_startup)
-    dp.shutdown.register(on_shutdown)
+async def on_shutdown(bot: Bot) -> None:
+    from services.scheduler import close_http_session, scheduler
+    scheduler.shutdown(wait=False)
+    await close_http_session()
 
-    logger.info("Starting bot in polling mode")
+    if settings.USE_WEBHOOK:
+        await bot.delete_webhook()
+        logger.info("Webhook removed")
+
+    logger.info("Bot stopped")
+
+
+async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
+    dp.startup.register(lambda: on_startup(bot))
+    dp.shutdown.register(lambda: on_shutdown(bot))
+
+    app = web.Application()
+    handler = SimpleRequestHandler(dispatcher=dp, bot=bot)
+    handler.register(app, path=WEBHOOK_PATH)
+    setup_application(app, dp, bot=bot)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, host=settings.HOST, port=settings.PORT)
+    await site.start()
+    logger.info("Webhook server started on %s:%s", settings.HOST, settings.PORT)
+
+    await asyncio.Event().wait()
+
+
+async def run_polling(bot: Bot, dp: Dispatcher) -> None:
+    dp.startup.register(lambda: on_startup(bot))
+    dp.shutdown.register(lambda: on_shutdown(bot))
+
+    logger.info("Starting in polling mode")
     await dp.start_polling(bot, drop_pending_updates=True)
+
+
+async def main() -> None:
+    bot, dp = create_bot_and_dp()
+
+    if settings.USE_WEBHOOK:
+        await run_webhook(bot, dp)
+    else:
+        await run_polling(bot, dp)
 
 
 if __name__ == "__main__":
