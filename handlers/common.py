@@ -4,6 +4,8 @@ from aiogram import Router
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
+from aiogram import Bot
+from config import settings
 
 from db.queries import (
     deactivate_subscription,
@@ -112,3 +114,32 @@ async def cmd_status(message: Message) -> None:
         "Используй /settings чтобы изменить настройки.",
         parse_mode="HTML",
     )
+
+@router.message(Command("chart"))
+async def cmd_chart_test(message: Message) -> None:
+    sub = await get_subscription(message.from_user.id)
+    if not sub:
+        await message.answer("Нет активной подписки.")
+        return
+
+    await message.answer("Генерирую график, подожди...")
+
+    from services.chart import generate_chart
+    chart = await generate_chart(sub.coins_list)
+
+    if chart is None:
+        await message.answer(
+            "Данных пока недостаточно для графика.\n"
+            "Подожди несколько минут — бот накопит историю цен."
+        )
+        return
+
+    from aiogram import Bot
+    bot = Bot(token=settings.BOT_TOKEN)
+    await bot.send_photo(
+        chat_id=sub.channel_id,
+        photo=chart,
+        caption="<b>📈 Тестовый график</b>",
+        parse_mode="HTML",
+    )
+    await message.answer("График отправлен в канал!")
