@@ -37,10 +37,7 @@ async def on_startup(bot: Bot) -> None:
 
     if settings.USE_WEBHOOK:
         webhook_url = f"{settings.WEBHOOK_BASE_URL}{WEBHOOK_PATH}"
-        await bot.set_webhook(
-            url=webhook_url,
-            drop_pending_updates=True,
-        )
+        await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
         logger.info("Webhook set: %s", webhook_url)
 
 
@@ -61,6 +58,12 @@ async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
     dp.shutdown.register(lambda: on_shutdown(bot))
 
     app = web.Application()
+
+    async def health(request):
+        return web.Response(text="OK", status=200)
+
+    app.router.add_get("/health", health)
+
     handler = SimpleRequestHandler(dispatcher=dp, bot=bot)
     handler.register(app, path=WEBHOOK_PATH)
     setup_application(app, dp, bot=bot)
