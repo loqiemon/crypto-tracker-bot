@@ -4,9 +4,8 @@ from aiogram import Router
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
-from aiogram import Bot
-from config import settings
 
+from config import settings
 from db.queries import (
     deactivate_subscription,
     get_or_create_user,
@@ -115,8 +114,10 @@ async def cmd_status(message: Message) -> None:
         parse_mode="HTML",
     )
 
+
 @router.message(Command("chart"))
 async def cmd_chart_test(message: Message) -> None:
+    from aiogram import Bot as AiogramBot
     sub = await get_subscription(message.from_user.id)
     if not sub:
         await message.answer("Нет активной подписки.")
@@ -134,12 +135,12 @@ async def cmd_chart_test(message: Message) -> None:
         )
         return
 
-    from aiogram import Bot
-    bot = Bot(token=settings.BOT_TOKEN)
+    bot = AiogramBot(token=settings.BOT_TOKEN)
     await bot.send_photo(
         chat_id=sub.channel_id,
         photo=chart,
         caption="<b>📈 Тестовый график</b>",
         parse_mode="HTML",
     )
+    await bot.session.close()
     await message.answer("График отправлен в канал!")

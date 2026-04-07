@@ -2,7 +2,6 @@ import logging
 from datetime import datetime, timedelta
 
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.base import async_session_maker
 from db.models import PriceHistory, Subscription, User
@@ -27,7 +26,7 @@ async def get_subscription(user_id: int) -> Subscription | None:
         result = await session.execute(
             select(Subscription).where(
                 Subscription.user_id == user_id,
-                Subscription.is_active == True,
+                Subscription.is_active is True,
             )
         )
         return result.scalar_one_or_none()

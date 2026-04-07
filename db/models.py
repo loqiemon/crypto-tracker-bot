@@ -61,3 +61,4 @@ class PriceHistory(Base):
 
     def __repr__(self) -> str:
         return f"<PriceHistory coin={self.coin_symbol} price={self.price_usd}>"
+    
