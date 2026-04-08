@@ -54,8 +54,8 @@ async def on_shutdown(bot: Bot) -> None:
 
 
 async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
-    dp.startup.register(lambda: on_startup(bot))
-    dp.shutdown.register(lambda: on_shutdown(bot))
+    # вызываем on_startup напрямую — не через lambda
+    await on_startup(bot)
 
     app = web.Application()
 
@@ -74,7 +74,11 @@ async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
     await site.start()
     logger.info("Webhook server started on %s:%s", settings.HOST, settings.PORT)
 
-    await asyncio.Event().wait()
+    try:
+        await asyncio.Event().wait()
+    finally:
+        await on_shutdown(bot)
+        await runner.cleanup()
 
 
 async def run_polling(bot: Bot, dp: Dispatcher) -> None:
