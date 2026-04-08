@@ -4,10 +4,9 @@ from config import settings
 
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=False,
+    echo=True,
     pool_size=5,
     max_overflow=10,
-    connect_args={"ssl": "require"},
 )
 
 async_session_maker = async_sessionmaker(
