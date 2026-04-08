@@ -28,35 +28,49 @@ def create_bot_and_dp() -> tuple[Bot, Dispatcher]:
 
 
 async def on_startup(bot: Bot) -> None:
-    await init_db()
-    logger.info("Database initialized")
+    try:
+        await init_db()
+        logger.info("Database initialized")
+    except Exception as e:
+        logger.error("Database init failed: %s", e)
+        raise
 
-    from services.scheduler import init_scheduler
-    await init_scheduler(bot)
-    logger.info("Scheduler initialized")
+    try:
+        from services.scheduler import init_scheduler
+        await init_scheduler(bot)
+        logger.info("Scheduler initialized")
+    except Exception as e:
+        logger.error("Scheduler init failed: %s", e)
+        raise
 
     if settings.USE_WEBHOOK:
-        webhook_url = f"{settings.WEBHOOK_BASE_URL}{WEBHOOK_PATH}"
-        await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
-        logger.info("Webhook set: %s", webhook_url)
+        try:
+            webhook_url = f"{settings.WEBHOOK_BASE_URL}{WEBHOOK_PATH}"
+            await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+            logger.info("Webhook set: %s", webhook_url)
+        except Exception as e:
+            logger.error("Webhook set failed: %s", e)
+            raise
 
 
 async def on_shutdown(bot: Bot) -> None:
-    from services.scheduler import close_http_session, scheduler
-    scheduler.shutdown(wait=False)
-    await close_http_session()
+    try:
+        from services.scheduler import close_http_session, scheduler
+        scheduler.shutdown(wait=False)
+        await close_http_session()
+    except Exception as e:
+        logger.warning("Shutdown error: %s", e)
 
     if settings.USE_WEBHOOK:
-        await bot.delete_webhook()
-        logger.info("Webhook removed")
+        try:
+            await bot.delete_webhook()
+        except Exception:
+            pass
 
     logger.info("Bot stopped")
 
 
 async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
-    # вызываем on_startup напрямую — не через lambda
-    await on_startup(bot)
-
     app = web.Application()
 
     async def health(request):
@@ -72,7 +86,10 @@ async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
     await runner.setup()
     site = web.TCPSite(runner, host=settings.HOST, port=settings.PORT)
     await site.start()
+
+    # сервер запущен — теперь инициализируем бота
     logger.info("Webhook server started on %s:%s", settings.HOST, settings.PORT)
+    await on_startup(bot)
 
     try:
         await asyncio.Event().wait()
@@ -82,11 +99,12 @@ async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
 
 
 async def run_polling(bot: Bot, dp: Dispatcher) -> None:
-    dp.startup.register(lambda: on_startup(bot))
-    dp.shutdown.register(lambda: on_shutdown(bot))
-
+    await on_startup(bot)
     logger.info("Starting in polling mode")
-    await dp.start_polling(bot, drop_pending_updates=True)
+    try:
+        await dp.start_polling(bot, drop_pending_updates=True)
+    finally:
+        await on_shutdown(bot)
 
 
 async def main() -> None:
