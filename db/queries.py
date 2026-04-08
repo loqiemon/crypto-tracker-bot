@@ -26,7 +26,7 @@ async def get_subscription(user_id: int) -> Subscription | None:
         result = await session.execute(
             select(Subscription).where(
                 Subscription.user_id == user_id,
-                Subscription.is_active is True,
+                Subscription.is_active == True,  # noqa: E712
             )
         )
         return result.scalar_one_or_none()
@@ -76,10 +76,11 @@ async def deactivate_subscription(user_id: int) -> None:
         logger.info("Deactivated subscription for user %s", user_id)
 
 
+
 async def get_all_active_subscriptions() -> list[Subscription]:
     async with async_session_maker() as session:
         result = await session.execute(
-            select(Subscription).where(Subscription.is_active == True)
+            select(Subscription).where(Subscription.is_active == True)  # noqa: E712
         )
         return list(result.scalars().all())
 
