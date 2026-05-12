@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-
+from sqlalchemy.pool import NullPool
 from config import settings
 
 engine = create_async_engine(
@@ -7,6 +7,11 @@ engine = create_async_engine(
     echo=True,
     pool_size=5,
     max_overflow=10,
+    connect_args={
+        "prepared_statement_cache_size": 0,
+        "statement_cache_size": 0,
+    },
+    poolclass=NullPool,
 )
 
 async_session_maker = async_sessionmaker(
