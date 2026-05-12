@@ -5,12 +5,14 @@ from config import settings
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=True,
-    # Отключаем встроенный пул SQLAlchemy, так как Render использует PgBouncer
+    # 1. ОБЯЗАТЕЛЬНО для PgBouncer: отключаем встроенный пул SQLAlchemy
     poolclass=NullPool, 
     connect_args={
-        # Эти две строки — критическое решение для ошибки DuplicatePreparedStatementError
+        # 2. Явно отключаем кэширование подготовленных выражений
         "prepared_statement_cache_size": 0,
         "statement_cache_size": 0,
+        # 3. Добавляем параметры для стабильности соединения
+        "command_timeout": 60,
     },
 )
 
@@ -22,6 +24,6 @@ async_session_maker = async_sessionmaker(
 
 async def init_db() -> None:
     from db.models import Base
-    # Важно: engine.begin() тоже будет использовать настройки выше
+    # Используем этот метод для инициализации таблиц
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
