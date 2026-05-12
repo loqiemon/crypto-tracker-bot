@@ -2,17 +2,19 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 from config import settings
 
+# Проверяем, есть ли уже параметры в URL, если нет - можно добавить программно
+db_url = settings.DATABASE_URL
+if "prepared_statement_cache_size" not in db_url:
+    separator = "&" if "?" in db_url else "?"
+    db_url += f"{separator}prepared_statement_cache_size=0"
+
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    db_url, # Используем модифицированный URL
     echo=True,
-    # 1. ОБЯЗАТЕЛЬНО для PgBouncer: отключаем встроенный пул SQLAlchemy
-    poolclass=NullPool, 
+    poolclass=NullPool,
     connect_args={
-        # 2. Явно отключаем кэширование подготовленных выражений
         "prepared_statement_cache_size": 0,
         "statement_cache_size": 0,
-        # 3. Добавляем параметры для стабильности соединения
-        "command_timeout": 60,
     },
 )
 
@@ -24,6 +26,7 @@ async_session_maker = async_sessionmaker(
 
 async def init_db() -> None:
     from db.models import Base
-    # Используем этот метод для инициализации таблиц
-    async with engine.begin() as conn:
+    # Используем соединение напрямую, чтобы избежать лишних проверок диалекта
+    async with engine.connect() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.commit()
